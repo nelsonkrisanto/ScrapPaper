@@ -28,14 +28,24 @@ def main():
     parser = argparse.ArgumentParser(description="ScrapPaper: Web scraping from PubMed and Google Scholar.")
     parser.add_argument("url", help="Paste the search URL here.")
     parser.add_argument("--pages", type=int, default=1, help="Number of pages to search (default is 1).")
+    parser.add_argument("--output", help="Output TSV file.")
     args = parser.parse_args()
 
+    global URL_input  # Add this line to make URL_input global
     URL_input = args.url
     headers = requests.utils.default_headers()
     headers.update({
         'User-Agent': 'Mozilla/15.0 (X11; Ubuntu; Linux x86_64; rv:52.0) Gecko/20210916 Firefox/95.0',
     })
     checkPage()
+
+    # Determine the default output file names
+    if args.output:
+        output_file = args.output
+    elif search_from == "Pubmed":
+        output_file = "scrapped_pubmed.tsv"
+    elif search_from == "Google Scholar":
+        output_file = "scrapped_gscholar.tsv"
 
     # ===== MAIN FRAMEWORK =====
 
@@ -47,14 +57,14 @@ def main():
 
             # SETTING UP THE CSV FILE
 
-            outfile = open("scrapped_pubmed.csv","w",newline='',encoding='utf-8')
-            writer = csv.writer(outfile)
+            outfile = open(output_file, "w", newline='', encoding='utf-8')
+            writer = csv.writer(outfile, delimiter='\t')
             df = pd.DataFrame(columns=['Title','Links','References'])
 
             # SETTING & GETTING PAGE NUMBER
 
             page_num = 1
-            page_view = 100 # can be changed to 10, 20, 50, 100, or 200
+            page_view = 100  # can be changed to 10, 20, 50, 100, or 200
             URL_ori = URL_input
             URL_edit = URL_ori + "&page=" + str(page_num) + "&size=" + str(page_view)    
             print("URL : ", URL_edit)
@@ -102,14 +112,14 @@ def main():
                     link_url = link["href"]
 
                 title_element_clean = title_element.text.strip()
-                link_url_clean = "https://pubmed.ncbi.nlm.nih.gov"+link_url
+                link_url_clean = "https://pubmed.ncbi.nlm.nih.gov" + link_url
 
                 print(title_element_clean)
                 print(link_url_clean)
                 print(cit_element)
                 print()
 
-                df2 = pd.DataFrame([[title_element_clean, link_url_clean, cit_element]],columns=['Title','Links','References'])
+                df2 = pd.DataFrame([[title_element_clean, link_url_clean, cit_element]], columns=['Title', 'Links', 'References'])
                 df = pd.concat([df, df2], ignore_index=True)
 
             wait()
@@ -121,7 +131,7 @@ def main():
             exit()
 
         df.index += 1
-        df.to_csv('scrapped_pubmed.csv')
+        df.to_csv(output_file, sep='\t', index=False)
         outfile.close()
 
     # ===== CODE FOR GOOGLE SCHOLAR =====
@@ -132,9 +142,9 @@ def main():
 
             # SETTING UP THE CSV FILE
 
-            outfile = open("scrapped_gscholar.csv","w",newline='',encoding='utf-8')
-            writer = csv.writer(outfile)
-            df = pd.DataFrame(columns=['Title','Links','References'])
+            outfile = open(output_file, "w", newline='', encoding='utf-8')
+            writer = csv.writer(outfile, delimiter='\t')
+            df = pd.DataFrame(columns=['Title', 'Links', 'References'])
 
             # SETTING & GETTING PAGE NUMBER
 
@@ -180,7 +190,7 @@ def main():
             headers = requests.utils.default_headers()
             headers.update({
                 'User-Agent': 'Mozilla/15.0 (X11; Ubuntu; Linux x86_64; rv:52.0) Gecko/20210916 Firefox/95.0',
-                })
+            })
 
             page = requests.get(URL_edit, headers=headers, timeout=None)
             soup = BeautifulSoup(page.content, "html.parser")
@@ -205,7 +215,7 @@ def main():
                     print(ref_element)
                     print()
 
-                    df2 = pd.DataFrame([[title_element, link_url, ref_element]], columns=['Title','Links','References'])
+                    df2 = pd.DataFrame([[title_element, link_url, ref_element]], columns=['Title', 'Links', 'References'])
                     df = pd.concat([df, df2], ignore_index=True)
 
             except AttributeError:
@@ -214,12 +224,12 @@ def main():
                 exit()
 
         df.index += 1
-        df.to_csv('scrapped_gscholar.csv',encoding='utf-8')
+        df.to_csv(output_file, sep='\t', index=False)
         outfile.close()
 
-    # END OF PROGRAM
+# END OF PROGRAM
 
-    print("Job finished, Godspeed you! Cite us.")
+print("Job finished, Godspeed you! Cite us.")
 
 if __name__ == "__main__":
     main()
