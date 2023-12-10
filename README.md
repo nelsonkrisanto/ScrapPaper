@@ -23,9 +23,12 @@ Rafsanjani, M. R. (2022). ScrapPaper: A web scrapping method to extract journal 
 ## Simplified instructions
 1. Download the `scrappaper.py` script and `cd` terminal to the directory.
 2. Copy the link from the first search results of PubMed or Google Scholar.
-3. Run the code and paste the link when prompted.
-4. When finished, open the results using text editor or spreadsheet. 
-5. Refer to the published paper for detailed instruction.
+3. Run the code
+   '''
+   python scrappper.py "https://scholar.google.com/scholar?hl=en&as_sdt=0%2C5&q=biology+&btnG=" --pages 10 > google_scholar_papers.tsv
+   '''
+5. When finished, open the results using text editor or spreadsheet. 
+6. Refer to the published paper for detailed instruction.
 
 ## Disclaimer
 Web scraping might get you blocked from the server, run at your own risk. So far,
