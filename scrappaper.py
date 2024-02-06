@@ -1,235 +1,65 @@
-import requests
 import csv
-import re
-import random
-import time
-import pandas as pd
-import argparse
-from sys import exit
+import requests
 from bs4 import BeautifulSoup
+import re
+import sys
 
-def wait():
-    print("Waiting for a few secs...")
-    time.sleep(random.randrange(1, 6))
-    print("Waiting done. Continuing...\n")
+def get_full_text(pubmed_id):
+    base_url = "https://pubmed.ncbi.nlm.nih.gov/"
+    url = base_url + str(pubmed_id)
+    response = requests.get(url)
 
-def checkPage():
-    global search_from
-    if "scholar.google.com" in URL_input:
-        search_from = "Google Scholar"
-        print("Input is from: Google Scholar.\n")
-    elif "pubmed" in URL_input:
-        search_from = "Pubmed"
-        print("Input is from: PubMed.\n")
+    if response.status_code == 200:
+        soup = BeautifulSoup(response.text, 'html.parser')
+        abstract = soup.find("div", class_="abstract-content")
+        if abstract:
+            return abstract.get_text(strip=True)
+    return None
+
+def identify_primers(text):
+    # Regular expression to match DNA sequences
+    pattern = re.compile(r'[ACGTacgt]{18,30}')
+
+    matches = pattern.findall(text)
+    return matches
+
+def identify_orientation(primer_text):
+    # Assuming Fw, FW, or forward in the primer indicates a forward primer, and similar for reverse
+    if 'Fw' in primer_text or 'FW' in primer_text or 'forward' in primer_text:
+        return 'Forward'
+    elif 'Rev' in primer_text or 'Rv' in primer_text or 'reverse' in primer_text:
+        return 'Reverse'
     else:
-        print("Page URL undefined.\n")
+        return 'Unknown'
 
-def main():
-    parser = argparse.ArgumentParser(description="ScrapPaper: Web scraping from PubMed and Google Scholar.")
-    parser.add_argument("url", help="Paste the search URL here.")
-    parser.add_argument("--pages", type=int, default=1, help="Number of pages to search (default is 1).")
-    parser.add_argument("--output", help="Output TSV file.")
-    args = parser.parse_args()
+def write_to_tsv(data, output_file):
+    with open(output_file, 'w', newline='', encoding='utf-8') as tsvfile:
+        writer = csv.writer(tsvfile, delimiter='\t')
+        writer.writerow(['PubMedID', 'PrimerSequence', 'Orientation'])
+        writer.writerows(data)
 
-    global URL_input  # Add this line to make URL_input global
-    URL_input = args.url
-    headers = requests.utils.default_headers()
-    headers.update({
-        'User-Agent': 'Mozilla/15.0 (X11; Ubuntu; Linux x86_64; rv:52.0) Gecko/20210916 Firefox/95.0',
-    })
-    checkPage()
+def process_csv(input_file, output_file):
+    data = []
 
-    # Determine the default output file names
-    if args.output:
-        output_file = args.output
-    elif search_from == "Pubmed":
-        output_file = "scrapped_pubmed.tsv"
-    elif search_from == "Google Scholar":
-        output_file = "scrapped_gscholar.tsv"
+    with open(input_file, 'r', encoding='utf-8') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            pubmed_id = row['PubMedID']
+            full_text = get_full_text(pubmed_id)
+            if full_text:
+                primers = identify_primers(full_text)
+                for primer in primers:
+                    orientation = identify_orientation(full_text)
+                    data.append([pubmed_id, primer, orientation])
 
-    # ===== MAIN FRAMEWORK =====
-
-    # ===== CODE FOR PUBMED =====
-
-    if search_from == "Pubmed":
-
-        try:
-
-            # SETTING UP THE CSV FILE
-
-            outfile = open(output_file, "w", newline='', encoding='utf-8')
-            writer = csv.writer(outfile, delimiter='\t')
-            df = pd.DataFrame(columns=['Title','Links','References'])
-
-            # SETTING & GETTING PAGE NUMBER
-
-            page_num = 1
-            page_view = 100  # can be changed to 10, 20, 50, 100, or 200
-            URL_ori = URL_input
-            URL_edit = URL_ori + "&page=" + str(page_num) + "&size=" + str(page_view)    
-            print("URL : ", URL_edit)
-
-            page = requests.get(URL_edit, headers=headers, timeout=None)
-            soup = BeautifulSoup(page.content, "html.parser")
-            wait()
-
-            page_total = soup.find("label", class_="of-total-pages").text
-            page_total_num = int(''.join(filter(str.isdigit, page_total)))
-            print(f"Total page number: {page_total_num}")
-            print(f"Results per page: {page_view}.\n")
-
-        except AttributeError:
-
-            print("Opss! ReCaptcha is probably preventing the code from running.")
-            print("Please consider running in another time.\n")
-            exit()
-
-        wait()
-
-        # EXTRACTING INFORMATION
-
-        for i in range(args.pages):
-            page_num_up = page_num + i
-            URL_edit = URL_ori + "&page=" + str(page_num_up) + "&size=" + str(page_view)
-            page = requests.get(URL_edit, headers=headers, timeout=None)    
-
-            soup = BeautifulSoup(page.content, "html.parser")
-            wait()
-            results = soup.find("section", class_="search-results-list")
-
-        try:
-
-            # EXTRACTING INFORMATION    
-
-            job_elements = results.find_all("article", class_="full-docsum")
-
-            for job_element in job_elements:
-                title_element = job_element.find("a", class_="docsum-title")
-                cit_element = job_element.find("span", class_="docsum-journal-citation full-journal-citation").text.strip()
-
-                links = job_element.find_all("a") 
-                for link in links:
-                    link_url = link["href"]
-
-                title_element_clean = title_element.text.strip()
-                link_url_clean = "https://pubmed.ncbi.nlm.nih.gov" + link_url
-
-                print(title_element_clean)
-                print(link_url_clean)
-                print(cit_element)
-                print()
-
-                df2 = pd.DataFrame([[title_element_clean, link_url_clean, cit_element]], columns=['Title', 'Links', 'References'])
-                df = pd.concat([df, df2], ignore_index=True)
-
-            wait()
-
-        except AttributeError:
-
-            print("Opss! ReCaptcha is probably preventing the code from running.")
-            print("Please consider running in another time.\n")
-            exit()
-
-        df.index += 1
-        df.to_csv(output_file, sep='\t', index=False)
-        outfile.close()
-
-    # ===== CODE FOR GOOGLE SCHOLAR =====
-
-    elif search_from == "Google Scholar":
-
-        try:
-
-            # SETTING UP THE CSV FILE
-
-            outfile = open(output_file, "w", newline='', encoding='utf-8')
-            writer = csv.writer(outfile, delimiter='\t')
-            df = pd.DataFrame(columns=['Title', 'Links', 'References'])
-
-            # SETTING & GETTING PAGE NUMBER
-
-            page_num = 0
-            URL_ori = str(URL_input + "&start=" + str(page_num))
-
-            page = requests.get(URL_ori, headers=headers, timeout=None)
-            soup = BeautifulSoup(page.content, "html.parser")
-            wait()
-
-            search_results = soup.find_all("div", class_="gs_ab_mdw")[1].text
-
-            if "About" in search_results:
-                search_results_split = search_results.split("results")[0].split("About")[1]
-            elif "results" in search_results:
-                search_results_split = search_results.split("results")[0]
-            else:    
-                search_results_split = search_results.split("result")[0]
-
-            search_results_num = int(''.join(filter(str.isdigit, search_results_split)))
-            page_total_num = int(search_results_num / 10) + 1
-            print(f"Total page number: {page_total_num}")
-            print(f"Total search results: {search_results_num}.\n")
-
-        except AttributeError:
-
-            print("Opss! ReCaptcha is probably preventing the code from running.")
-            print("Please consider running in another time.\n")
-            exit()
-
-        wait()
-
-        # EXTRACTING INFORMATION
-
-        for i in range(page_total_num):
-
-            # SETTING UP URL SECOND TIME
-
-            page_num_up = page_num + i
-            print(f"Going to page {page_num_up}.\n")
-            URL_edit = str(URL_input + "&start=" + str(page_num_up) + "0")
-
-            headers = requests.utils.default_headers()
-            headers.update({
-                'User-Agent': 'Mozilla/15.0 (X11; Ubuntu; Linux x86_64; rv:52.0) Gecko/20210916 Firefox/95.0',
-            })
-
-            page = requests.get(URL_edit, headers=headers, timeout=None)
-            soup = BeautifulSoup(page.content, "html.parser")
-            wait()
-
-            results = soup.find("div", id="gs_res_ccl_mid")
-
-            # EXTRACTING INFORMATION
-
-            try:
-
-                job_elements = results.find_all("div", class_="gs_ri")
-                for job_element in job_elements:
-
-                    ref_element = job_element.find("div", class_="gs_a").text
-                    links = job_element.find("a") 
-                    link_url = links["href"]
-                    title_element = links.text.strip()
-
-                    print(title_element)
-                    print(link_url)
-                    print(ref_element)
-                    print()
-
-                    df2 = pd.DataFrame([[title_element, link_url, ref_element]], columns=['Title', 'Links', 'References'])
-                    df = pd.concat([df, df2], ignore_index=True)
-
-            except AttributeError:
-                print("Opss! ReCaptcha is probably preventing the code from running.")
-                print("Please consider running in another time.\n")
-                exit()
-
-        df.index += 1
-        df.to_csv(output_file, sep='\t', index=False)
-        outfile.close()
-
-# END OF PROGRAM
-
-print("Job finished, Godspeed you! Cite us.")
+    write_to_tsv(data, output_file)
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) != 3:
+        print("Usage: python script_name.py input_file output_file")
+        sys.exit(1)
+
+    input_file = sys.argv[1]
+    output_file = sys.argv[2]
+
+    process_csv(input_file, output_file)
