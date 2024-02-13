@@ -1,7 +1,7 @@
 '''
 Forked from 'ScrapPaper' by M. R. Rafsanjani.
-Update script for Pubmed Summary format.
-e.g.: https://pubmed.ncbi.nlm.nih.gov/?term=dengue+virus+primer
+Updated script to scrape Pubmed Abstract format.
+e.g.: https://pubmed.ncbi.nlm.nih.gov/?term=dengue+virus+primer&format=abstract 
 '''
 
 print("Initiating... please wait.\n")
@@ -58,7 +58,7 @@ if search_from == "Pubmed":
     try:
         # SETTING & GETTING PAGE NUMBER
         page_num = 1
-        page_view = 200  # can be change to 10, 20, 50, 100, or 200
+        page_view = 200  # can be changed to 10, 20, 50, 100, or 200
         URL_edit = URL_ori + "&page=" + str(page_num) + "&size=" + str(page_view)    
         print("URL : ", URL_edit)
 
@@ -87,23 +87,39 @@ if search_from == "Pubmed":
 
         soup = BeautifulSoup(page.content, "html.parser")
         wait()
-        results = soup.find("section", class_="search-results-list")
-        job_elements = results.find_all("article", class_="full-docsum")
+        results = soup.find("section", class_="search-results-list padded-on-mobile")
+        job_elements = results.find_all("div", class_="results-article")
 
+        
         for job_element in job_elements:
-            title_element = job_element.find("a", class_="docsum-title")
-            cit_element = job_element.find("span", class_="docsum-journal-citation full-journal-citation").text.strip()
-            link_url = job_element.find("a")["href"]  # Assuming the first 'a' tag is the correct link
+            # Title
+            title_element = job_element.find("h1", class_="heading-title").find("a")
             title_element_clean = title_element.text.strip()
-            link_url_clean = "https://pubmed.ncbi.nlm.nih.gov" + link_url
+            print(title_element_clean)
+            
+            # Citation
+            citation_element = job_element.find("span", class_="cit")
+            citation_info = citation_element.text.strip() if citation_element else 'Citation info not found'
+            print(citation_info)
+            
+            # Pubmed Link
+            pubmed_id_element = job_element.find("strong", class_="current-id", title="PubMed ID")
+            pubmed_id = pubmed_id_element.text.strip() if pubmed_id_element else 'PubMed ID not found'
+            pubmed_link = "https://pubmed.ncbi.nlm.nih.gov/" + pubmed_id
+            print(pubmed_link)
+            
+            # Full Text Link
+            full_text_link_element = job_element.find("div", class_="full-text-links-list")
+            full_text_link_url = full_text_link_element.find("a")['href'] if full_text_link_element else 'No full text link available'
+            print(full_text_link_url)
 
-            # Collect data
-            data.append([title_element_clean, link_url_clean, cit_element])
+            # Append data
+            data.append([title_element_clean, citation_info, pubmed_link, full_text_link_url])
 
         wait()
 
     # Convert collected data to DataFrame and append to CSV, adding header if needed
-    df = pd.DataFrame(data, columns=['Title', 'Links', 'References'])
+    df = pd.DataFrame(data, columns=['Title', 'Reference', 'Pubmed Link', 'Full Text Link'])
     df.to_csv('scrapped_pubmed.csv', mode='a', header=need_header, index=False)
 
 # END OF PROGRAM
