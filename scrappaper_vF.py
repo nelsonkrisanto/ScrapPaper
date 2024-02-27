@@ -1,6 +1,6 @@
 '''
 Forked from 'ScrapPaper' by M. R. Rafsanjani.
-Updated script to try scrape Pubmed Summary / Abstract format.
+Updated script to merge scraped Pubmed Summary / Abstract format data.
 e.g.: https://pubmed.ncbi.nlm.nih.gov/?term=dengue+virus+primer
 '''
 
